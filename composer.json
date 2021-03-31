@@ -1,0 +1,13 @@
+{
+    "name": "stejaysulli/php-word-cat",
+    "description": "Library to manipulate docx files",
+    "type": "library",
+    "license": "GPL v3.0",
+    "authors": [
+        {
+            "name": "Stephen Sullivan",
+            "email": "stephen@sulli.work"
+        }
+    ],
+    "require": {}
+}
