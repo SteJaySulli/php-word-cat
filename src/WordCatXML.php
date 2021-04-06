@@ -546,6 +546,15 @@ class WordCatXML {
         }
     }
 
+    /**
+     * This function will insert a new section after the specified node.
+     * 
+     * This works by finding the final sectPr element, and copying it to a new paragraph
+     * after the insertion point.
+     *
+     * @param DOMElement $insertAfter
+     * @return DOMElement|void
+     */
     function splitSection(DOMElement $insertAfter) {
 
         $insertAfter->setAttribute("wordcat_id", "splitsection");
@@ -574,5 +583,22 @@ class WordCatXML {
                 }
             }
         }
+    }
+
+    /**
+     * Iterate from parent to parent until you find a node matching the given tag name.
+     * 
+     * This allows us, for example, to find the w:p node that contains a given w:t element.
+     *
+     * @param string $tagName
+     * @param DOMNode $fromNode
+     * @return DOMNode|null
+     */
+    function getClosestTagName(string $tagName, DOMNode $fromNode) {
+        $find = $fromNode;
+        while($find && $find->nodeName != $tagName) {
+            $find = $find->parentNode;
+        }
+        return $find;
     }
 }

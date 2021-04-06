@@ -50,19 +50,30 @@ echo "Find Text:\n\n";
 $wordcat->findText("apple")
         ->andFindText("orange")
         ->andFindText("pear")
-        ->forSearch(function($element) {
-            echo "{$element->textContent}\n";
+        ->forSearch(function($element) use($wordcat) {
+            // Get the paragraph that contains that element:
+            if($container = $wordcat->getClosestTagName("w:p", $element)) {
+                // Print ALL the text content (including that of child elements)
+                echo "Paragraph: {$container->textContent}\n";
+                echo "Contains:  {$element->textContent}\n";
+            } else {
+                // Fall back to only showing the text content of the found element if there is no containing paragraph
+                echo "Text found: {$element->textContent}\n";
+            }
         });
 
 // Get an array of all the matching XML elements (DOMNode objects):
 $results = $wordcat->getSearch();
 
+
+echo "\nFind text using regular expression:\n";
 // Clear the search results:
 $wordcat->clearSearch();
 
 // Do the same, but use a regex this time, and make it case insensitive:
 $wordcat->findRegex("/(apple|orange|pear)/i")
         ->forSearch(function($element) {
+            // We'll only show the element itself, not the whole paragraph containing it
             echo "{$element->textContent}\n";
         });
 
