@@ -547,6 +547,96 @@ class WordCatXML {
     }
 
     /**
+     * Find out if a given node appears later in the document than another
+     * given node.
+     *
+     * @param DOMNode $node
+     * @param DOMNode $afterNode
+     * @return boolean
+     */
+    function nodeIsAfter(DOMNode $node, DOMNode $afterNode) {
+        $getAllElements = $this->document->getElementsByTagName("*");
+        $found = false;
+        foreach($getAllElements as $index => $element) {
+            if(!$found) {
+                if( $element->isSameNode($afterNode) ) {
+                    $found = true;
+                }
+            } else {
+                if( $element->isSameNode($node) ) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Find out if a given node appears earlier in the document than another
+     * given node.
+     *
+     * @param DOMNode $node
+     * @param DOMNode $beforeNode
+     * @return boolean
+     */
+    function nodeIsBefore(DOMNode $node, DOMNode $beforeNode) {
+        $getAllElements = $this->document->getElementsByTagName("*");
+        $found = false;
+        foreach($getAllElements as $index => $element) {
+            if( $element->isSameNode($beforeNode) ) {
+                $found = true;
+            }
+            if($element->isSameNode($node)) {
+                return !$found;
+            } 
+        }
+        return false;
+    }
+
+    /**
+     * Find a node after a given node in the document with the given tag name.
+     *
+     * @param string $tagName
+     * @param DOMNode $afterNode
+     * @return void
+     */
+    function getNextTagName(string $tagName, DOMNode $afterNode) {
+        $getAllElements = $this->document->getElementsByTagName("*");
+        $found = false;
+        foreach($getAllElements as $index => $element) {
+            if(!$found) {
+                if( $element->isSameNode($afterNode) ) {
+                    $found = true;
+                }
+            } else {
+                if( $element->nodeName == $tagName ) {
+                    return $element;
+                }
+            }
+        }
+    }
+
+    /**
+     * Find a node before a given node in the document with the given tag name.
+     *
+     * @param string $tagName
+     * @param DOMNode $afterNode
+     * @return void
+     */
+    function getPreviousTagName(string $tagName, DOMNode $beforeNode) {
+        $getAllElements = $this->document->getElementsByTagName("*");
+        $found = null;
+        foreach($getAllElements as $index => $element) {
+            if( $element->isSameNode($beforeNode) ) {
+                return $found;
+            }
+            if( $element->nodeName == $tagName ) {
+                $found = $element;
+            }
+        }
+    }
+
+    /**
      * This function will insert a new section after the specified node.
      * 
      * This works by finding the final sectPr element, and copying it to a new paragraph
