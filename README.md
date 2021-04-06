@@ -42,57 +42,35 @@ A nice example of all the basic features are available in [test/example.php](./t
 <?php
 use WordCat\WordCat;
 
-// Open a docx file for processing:
-$wordcat = WordCat::instance("/path/to/document.docx");
+$wordcat = WordCat::instance("example1.doc");
 
-// Case sensitive search and replace:
+// Find XML elements containing the text "apple", "orange" or "pear"
+$wordcat->findText("apple")
+        ->andFindText("orange")
+        ->andFindText("pear")
+        ->forSearch(function($element) {
+            // Print the text content of each element:
+            echo "{$element->textContent}\n";
+        });
+
+// Get an array of all the matching XML elements (DOMNode objects):
+$results = $wordcat->getSearch();
+
+// Clear the search results:
+$wordcat->clearSearch();
+
+// Do the same, but use a regex this time, and make it case insensitive:
+$wordcat->findRegex("/(apple|orange|pear)/i")
+        ->forSearch(function($element) {
+            echo "{$element->textContent}\n";
+        });
+
+// Replace all instances of the word "wordcat" with "WordCat":
 $wordcat->clearSearch()->replaceText("wordcat", "WordCat");
-
-// Replace text using a regular expression:
-$wordcat->clearSearch()->replaceText("integer", "integer (" . random_int(1,100) . ")");
-
-// Add a new random number after all occurences of the word "random":
-$wordcat->clearSearch()->replaceText("random", function($found) {
-    return "$found (" . random_int(0,100) . ")";
-});
 
 // Use a regex to replace anything that's formatted like a Y-m-d date with
 // today's date:
-$wordcat->clearSearch()->replaceText("/[0-9]{4}-[0-9]{2}-[0-9]{2}/", date("Y-m-d"), true);
-
-// $wordcat->clearSearch()->replaceRegex("/[0-9]{4}-[0-9]{2}-[0-9]{2}/", date("Y-m-d"));
-
-// // Use a regex to make a more complex replacement:
-// $wordcat->clearSearch()->replaceRegex("/i (.+ )?like (.+) a lot/i", 'I $1love $2 completely');
-
-// // Use a regex to make an even more complex replacement; here we use a
-// // callback to change only some matches (at random):
-// $wordcat->clearSearch()->replaceRegex("/shuffle ([a-z0-9]+)/i", function($found) {
-//     if(random_int(0,99) < 50) {
-//         return "shuffled " . str_shuffle(substr($found, 8));
-//     } else {
-//         return 'unshuffled $1';
-//     }
-// });
-
-// Inserting new content
-///////////////////////////////////////////////////////////////////////////////
-echo "Inserting new content\n";
-
-/*
-    WordCat provides some basic functions to insert content into the document.
-    This is currently limited to the insertion of plain text (with no styling)
-    and images which fit within a set size limit.
-
-    When inserting images, you specify the size in points - The image will be
-    sized within these dimensions while maintaining the aspect ratio of the
-    image.
-
-    Note that images should be inserted into a run within a paragraph; this
-    isn't compulsory, but it is recommended to avoid unwanted effects such as
-    text flowing around the image in odd ways. To do this in the example
-    below, we use insertRun() to insert a new run to the end of a paragraph.
-*/
+$wordcat->clearSearch()->replaceRegex("/[0-9]{4}-[0-9]{2}-[0-9]{2}/", date("Y-m-d"));
 
 // Insert some paragraphs after each paragraph containing some text:
 $wordcat->findText("inserted paragraph next")
@@ -103,55 +81,15 @@ $wordcat->findText("inserted paragraph next")
                 "This is the first inserted paragraph",
                 $insertionPoint
             );
-            
-            // Insert another paragraph after the one we just inserted:
-            $p2 = $wordcat->insertParagraph(
-                [
-                    "This is the second inserted paragraph.",
-                    "Note that we can include several text runs",
-                    "by specifying an array."
-                ],
-                $p1
-            );
-            
-            // Insert an image into the last paragraph inside a new run:
-            $wordcat->insertImage(
-                $imageFile, // The image file we want to insert
-                $wordcat->insertRun($p2), // Create a new insertion point
-                600, 600, // The width and height constraints for the image
-                "Inserted image" // The title of the image
-            );
-
         }
     );
 
-// Document Concatenation/Insertion
-///////////////////////////////////////////////////////////////////////////////
-echo "Inserting one document into another\n";
-
-/*
-    The primary function this library needed to provide was the ability to
-    concatenate two docx documents together. 
-
-    This is a fairly simple implementation but the task is more complex than
-    it may seem; docx files have internal IDs to assets (images in particular)
-    which need to be translated to avoid conflicts between the source document
-    IDs and the ones that already exist within the destination document.
-
-    WordCat will try to take care of this for you, so you can insert some or
-    all content from one document into another. The styles are not guaranteed
-    to be preserved, but the content itself (including images) should be.
-
-    Note that the source document will be altered during the process (for
-    example all of the IDs that conflict with our destination document will be
-    changed) - It is assumed that the source document is a temporary document
-    that will not be saved, so changes can be made in this before inserting it
-    into the destination document. Basically DO NOT SAVE YOUR SOURCE DOCUMENT
-    AFTER INSERTING IT INTO ANOTHER DOCUMENT!
-*/
 
 // Get an element to insert the document after:
 $search = $wordcat->findText("INSERT DOCUMENT HERE")->getSearch();
+
+// Open a document to insert
+$wordcatSource = WordCat::instance("example2.docx");
 
 // Check we have at least one insertion point:
 if(count($search) > 0) {
@@ -162,30 +100,11 @@ if(count($search) > 0) {
     $wordcat->removeNode($search[0]);
 }
 
-// Saving & Closing
-///////////////////////////////////////////////////////////////////////////////
-echo "Saving and closing files\n";
-
-/*
-    There are two save functions; You probably do NOT want save() but instead
-    want to use saveAs so you can save the results of your changes to a new
-    file.
-
-    Once you are done with a WordCat document, you should always close it.
-    This ensures that the temporary files are cleaned up. While WordCat does
-    attempt to do this with a destructor, destructors in PHP seem to be
-    unreliable, so I recommend you always do this manually!
-
-    Once a WordCat object is closed, you should discard it; any attempts to
-    use the object after this point will result in an error.
-*/
-
 // Save a new docx file
-$wordcat->saveAs($outputFile);
+$wordcat->saveAs("test-output.docx");
 
 // Close the WordCat instance
 $wordcat->close();
 $wordcatSource->close();
 
-echo "Example script completed.\n";
 ```
