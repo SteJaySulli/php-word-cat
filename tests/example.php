@@ -1,54 +1,96 @@
-# WordCat - WORK IN PROGRESS
-A simple php library for manipulation of docx word processed document; in particular the library is designed to allow content from one document to be inserted into another document, and it also provides some features allowing for searching and replacing content, and inserting new text and images.
-
-# Dependencies
-This library requires `DOMDocument` and `SimpleXML`.
-
-# Features
-This library was designed to solve some fairly specific issues I was having with (mentioning no names) another popular PHP library when creating new documents from a given template; As such there are a **lot** of features that simply aren't implemented as I have had no need for them. I have added a "limitations" section below to list particularly glaring features which you may want but are missing, but if a feature you want isn't in the bullet list below, take it as read that the library won't do it for you!
-
-* Open a docx document
-* Read files from the document
-* Write files to the document
-* Manipulate XML files within the document
-* Save docx, either overwriting the original file or as a new document
-* Search for text, either as a binary/plain text search or regular expression
-* Replace text, either as a binary/plain text search or regular expression
-* Insert paragraphs containing plain text
-* Insert image files with a specified size (aspect ratio is preserved while constraining the image within the specified size)
-* Insert the contents of one docx into another
-
-# Limitations
-As this library was designed to solver some fairly specific issues, it will not do a lot of things you may require; I may or may not come to add features
-
-* You cannot create a new document from scratch; you need to load an existing docx file to work on
-* The library is naive; most operations require some knowledge of the internal XML structure of docx files
-
-# Installation
-
-You can install this library using composer:
-
-```bash
-composer install stejaysulli/php-word-cat
-```
-
-It should be possible to use the library without composer, but this has not been tested and you will need to provide your own method to autoload the files in the `src` directory.
-
-# Usage
-
-A nice example of all the basic features are available in [test/example.php](./test/example.php) - It is adviseable to check that out for proper usage details. Just so you can get a feel for the kind of code you'll be writing with WordCat, here's a brief example though:
-
-```php
 <?php
+require_once __DIR__ . '/../vendor/autoload.php';
 use WordCat\WordCat;
 
-// Open a docx file for processing:
-$wordcat = WordCat::instance("/path/to/document.docx");
+// Set the filenames for the files we'll use in the examples below:
+$mainDocumentFile = __DIR__ . "/example1.docx";
+$sourceDocumentFile = __DIR__ . "/example2.docx";
+$imageFile = __DIR__ . "/tulips.png";
+$outputFile = __DIR__ . "/../test-output-example.docx";
 
-// Case sensitive search and replace:
+// Load a docx file:
+///////////////////////////////////////////////////////////////////////////////
+echo "Open WordCat documents:\n";
+
+/* 
+    You should always instantiate WordCat with an existing docx file to load;
+    this can be done using the "instance" helper, or by instantiating a WordCat
+    object yourself, as shown below.
+
+    Behind the scenes, WordCat will make a copy of the docx file to a temporary
+    file which it will keep open while you are working on the document and 
+    until you close the WordCat instance. It's worth keeping this in mind; 
+    Although WordCat's destructor is supposed to take care of deleting the
+    temporary file if you forget to, testing has shown that this doesn't always
+    happen!
+*/
+
+$wordcat = WordCat::instance($mainDocumentFile);
+$wordcatSource = new WordCat($sourceDocumentFile);
+
+// Find Text
+///////////////////////////////////////////////////////////////////////////////
+echo "Find Text:\n\n";
+
+/*
+    WordCat provides a facility to find xml elements which contain text that
+    matches a given string or regular expression pattern. To make this as
+    flexible as possible, searches can be chained together using various
+    functions.
+
+    There are a few variations on findText; here we'll show "findText",
+    "andFindText" and "findRegex".
+
+    In addition we'll show the handy "forSearch" method which allows you to
+    iterate over the search results and operate on each element found.
+*/
+
+// Find a list of elements which contain the words "apple", "orange" and 
+// "pear", and print the full text of the elements, each to a single line
+$wordcat->findText("apple")
+        ->andFindText("orange")
+        ->andFindText("pear")
+        ->forSearch(function($element) {
+            echo "{$element->textContent}\n";
+        });
+
+// Get an array of all the matching XML elements (DOMNode objects):
+$results = $wordcat->getSearch();
+
+// Clear the search results:
+$wordcat->clearSearch();
+
+// Do the same, but use a regex this time, and make it case insensitive:
+$wordcat->findRegex("/(apple|orange|pear)/i")
+        ->forSearch(function($element) {
+            echo "{$element->textContent}\n";
+        });
+
+
+
+// Find and replace text
+///////////////////////////////////////////////////////////////////////////////
+echo "\nFind and replace text\n";
+
+/*
+    This is a very simple and essential tool for using a docx as a template for
+    a new file. WordCat makes this easy, but there are a few gotchas which I
+    will list in a section below these examples.
+
+    The find/replace functions augment the findText methods (shown below); when
+    doing a find/replace without it being related to a search you've previously
+    done, it's good idea to clear the search first to ensure the find/replace
+    operation is not limited to whatever you last searched - this includes the
+    last find/replace operation you did!
+
+    The replacement text can be a string, or a callback to provide more
+    complex functionality.
+*/
+
+// Replace all instances of the word "wordcat" with "WordCat":
 $wordcat->clearSearch()->replaceText("wordcat", "WordCat");
 
-// Replace text using a regular expression:
+// Add the same random number after all occurences of the word "integer":
 $wordcat->clearSearch()->replaceText("integer", "integer (" . random_int(1,100) . ")");
 
 // Add a new random number after all occurences of the word "random":
@@ -58,22 +100,22 @@ $wordcat->clearSearch()->replaceText("random", function($found) {
 
 // Use a regex to replace anything that's formatted like a Y-m-d date with
 // today's date:
-$wordcat->clearSearch()->replaceText("/[0-9]{4}-[0-9]{2}-[0-9]{2}/", date("Y-m-d"), true);
+$wordcat->clearSearch()->replaceRegex("/[0-9]{4}-[0-9]{2}-[0-9]{2}/", date("Y-m-d"));
 
-// $wordcat->clearSearch()->replaceRegex("/[0-9]{4}-[0-9]{2}-[0-9]{2}/", date("Y-m-d"));
+// Use a regex to make a more complex replacement:
+$wordcat->clearSearch()->replaceRegex("/i (.+ )?like (.+) a lot/i", 'I $1love $2 completely');
 
-// // Use a regex to make a more complex replacement:
-// $wordcat->clearSearch()->replaceRegex("/i (.+ )?like (.+) a lot/i", 'I $1love $2 completely');
-
-// // Use a regex to make an even more complex replacement; here we use a
-// // callback to change only some matches (at random):
-// $wordcat->clearSearch()->replaceRegex("/shuffle ([a-z0-9]+)/i", function($found) {
-//     if(random_int(0,99) < 50) {
-//         return "shuffled " . str_shuffle(substr($found, 8));
-//     } else {
-//         return 'unshuffled $1';
-//     }
-// });
+// Use a regex to make an even more complex replacement; here we use a
+// callback to change only some matches (at random):
+$wordcat->clearSearch()->replaceRegex("/shuffle ([a-z0-9]+)/i", function($found) {
+    if(random_int(0,99) < 50) {
+        // This shuffles the actual text found after "shuffle ":
+        return "shuffled " . str_shuffle(substr($found, 8));
+    } else {
+        // This doesn't shuffle, so we use a regex reference:
+        return 'unshuffled $1';
+    }
+});
 
 // Inserting new content
 ///////////////////////////////////////////////////////////////////////////////
@@ -188,4 +230,3 @@ $wordcat->close();
 $wordcatSource->close();
 
 echo "Example script completed.\n";
-```

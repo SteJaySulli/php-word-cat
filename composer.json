@@ -9,5 +9,10 @@
             "email": "stephen@sulli.work"
         }
     ],
-    "require": {}
+    "require": {},
+    "autoload": {
+        "psr-4": {
+            "WordCat\\": "src/"
+        }
+    }
 }
