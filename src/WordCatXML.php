@@ -265,7 +265,11 @@ class WordCatXML {
     }
 
     /**
-     * Set the starting node from which (and including) search results will be returned
+     * Set the starting node from which (and including) search results will be returned.
+     * 
+     * Note that this filter is applied when you get the search results; the find routines
+     * are not aware of this filter so changing this filter after you have search results
+     * will effect the results of the search without the need to search again.
      *
      * @param DOMNode|null $node
      * @return WordCatXML
@@ -276,7 +280,11 @@ class WordCatXML {
     }
 
     /**
-     * Set the starting node up to which (and including) search results will be returned
+     * Set the starting node up to which (not including) search results will be returned
+     *
+     * Note that this filter is applied when you get the search results; the find routines
+     * are not aware of this filter so changing this filter after you have search results
+     * will effect the results of the search without the need to search again.
      *
      * @param DOMNode|null $node
      * @return WordCatXML
@@ -287,7 +295,12 @@ class WordCatXML {
     }
 
     /**
-     * Set the node we want all search results to be within (but not including)
+     * Set the node we want all search results to be within. This will not include the
+     * specified node iteself in the search results.
+     *
+     * Note that this filter is applied when you get the search results; the find routines
+     * are not aware of this filter so changing this filter after you have search results
+     * will effect the results of the search without the need to search again.
      *
      * @param DOMNode|null $node
      * @return WordCatXML
