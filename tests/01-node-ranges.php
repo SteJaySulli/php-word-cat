@@ -68,7 +68,6 @@ for($i=0; $i < 8; $i++) {
     $node = $wordcat->getNextTagName("w:p", $paragraphs[$i]);
     echo $paragraphs[$i]->textContent . " is followed by " . $node->textContent . "\n";
 }
-
 echo "\n";
 
 // Test getPreviousTagName
@@ -165,5 +164,57 @@ $wordcat->clearSearch()
         echo "{$node->textContent}\n";
     });
 echo "\n";
+
+// We can find nodes from attributes too:
+$wordcat->clearSearch()
+    ->findAttribute("w:val")
+    ->searchTo($paragraphs[2])
+    ->forSearch(function( $node ) use ($wordcat) {
+        echo $wordcat->getNodeXML($node);
+        if($p = $wordcat->getClosestTagName("w:p", $node)) {
+            echo "Within {$p->textContent}\n";
+        } else {
+            echo "Not within paragraph\n";
+        }
+    });
+echo "\n";
+
+// We can even find nodes with specific attributes:
+    $wordcat->clearSearch()
+    ->findAttribute("w:val", "Normal")
+    ->forSearch(function( $node ) use ($wordcat) {
+        echo $wordcat->getNodeXML($node);
+        if($p = $wordcat->getClosestTagName("w:p", $node)) {
+            echo " Within {$p->textContent}\n";
+        } else {
+            echo " Not within paragraph\n";
+        }
+    });
+echo "\n";
+
+// We can get top level parent of a given node. Lets get the top level parent of our
+// first paragraph: this should be the w:body node:
+$body = $wordcat->getTopLevelParent($paragraphs[1]);
+echo "Top level node: {$body->nodeName}\n";
+
+// Lets check programmatically to see if our body is actually the one and only body:
+foreach($wordcat->getNodesByTagName("body") as $node) {
+    if($wordcat->nodeIs($node, $body)) {
+        echo "Body node matches!\n";
+    }
+}
+
+// We can also specify what the top level is when getting a top level parent; lets
+// rebuild our list of paragraphs using this feature:
+$paragraphs = [];
+$wordcat->findText("Paragraph")->forSearch( function($node) use(&$paragraphs, $wordcat, $body) {
+    $paragraphs[] = $wordcat->getTopLevelParent($node, $body);
+});
+// Now we'll print the paragraphs to ensure we have them
+foreach($paragraphs as $p) {
+    echo "{$p->textContent}\n";
+}
+
+
 
 $wordcat->close();

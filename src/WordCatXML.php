@@ -375,7 +375,6 @@ class WordCatXML {
         }
         $this->setSearch($elements, $append);
         return $this;
-
     }
 
     /**
@@ -387,6 +386,52 @@ class WordCatXML {
     function andFindTagName(string $tagName) {
         return $this->findTagName($tagName, true);
     }
+
+    /**
+     * Search for nodes with a given attribute, optionally if it has the given value,
+     * storing the list as an array in the search results which can then be obtained 
+     * using getSearch().
+     * 
+     * Like all search features, this can be chained as it returns $this.
+     * 
+     * You can optionally append to search results, but it is better to use the
+     * andFindAttribute alias as this is semantically clearer.
+     *
+     * @param string $attribute
+     * @param string|null $value
+     * @param boolean $append
+     * @return void
+     */
+    function findAttribute(string $attribute, ?string $value = null, bool $append = false) {
+        if(!$append) {
+            $this->clearSearch(false);
+        }
+        $elements = [];
+        $all = $this->document->getElementsByTagName("*");
+        foreach($all as $node) {
+            if($node->hasAttributes()) {
+                if($node->hasAttribute($attribute)) {
+                    if(is_null($value) || $node->getAttribute($attribute) == $value) {
+                        $elements[] = $node;
+                    }
+                }
+            }
+        }
+        $this->setSearch($elements, $append);
+        return $this;
+    }
+
+    /**
+     * An alias for findAttribute which appends to the search results.
+     *
+     * @param string $attribute
+     * @param string $value
+     * @return WordCatXML
+     */
+    function andFindAttribute(string $attribute, string $value) {
+        return $this->findAttribute($attribute, $value, true);
+    }
+
 
     /**
      * Text search function, which searches the whole document for the given text content.
@@ -560,6 +605,7 @@ class WordCatXML {
     function replaceRegex($find, $replace) {
         return $this->replaceText($find, $replace, true);
     }
+
 
     /**
      * Perform an xpath query on the XML document.
@@ -745,6 +791,17 @@ class WordCatXML {
     }
 
     /**
+     * Wrapper to compare two nodes; if they are the same node true is returned
+     *
+     * @param DOMNode $node
+     * @param DOMNode $isNode
+     * @return bool
+     */
+    function nodeIs(DOMNode $node, DOMNode $isNode) {
+        return $node->isSameNode($isNode);
+    }
+
+    /**
      * Find a node after a given node in the document with the given tag name.
      *
      * @param string $tagName
@@ -842,4 +899,26 @@ class WordCatXML {
         }
         return $find;
     }
+
+    /**
+     * Get the parent node at the top level (root node).
+     * 
+     * You can optionally specify the top level node; for instance you may want the parent
+     * that is a child of the w:body node rather than the w:document 
+     *
+     * @param DOMNode $node
+     * @param DOMNode|null $topLevel
+     * @return DOMNode
+     */
+    function getTopLevelParent(DOMNode $node, ?DOMNode $topLevel = null) {
+        if(is_null($topLevel)) {
+            $topLevel = $this->document->documentElement;
+        }
+        $find = $node;
+        while($find && !$find->parentNode->isSameNode($topLevel)) {
+            $find = $find->parentNode;
+        }
+        return $find;
+    }
+
 }
