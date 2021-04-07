@@ -311,6 +311,30 @@ class WordCatXML {
     }
 
     /**
+     * This function iterates over the search results to remove any duplicate entries for the same
+     * node. This effects the search results, and ignores any additional filters, so it should be
+     * called after any find functions.
+     *
+     * @return WordCatXML
+     */
+    function searchUnique() {
+        $searchResults = [];
+        foreach($this->searchResults as $node) {
+            $found=false;
+            foreach($searchResults as $check) {
+                if($this->nodeIs($node, $check)) {
+                    $found = true;
+                }
+            }
+            if(!$found) {
+                $searchResults[]=$node;
+            }
+        }
+        $this->searchResults = $searchResults;
+        return $this;
+    }
+
+    /**
      * Get the search results. This returns an array (not a DOMNodeList!) of
      * elements which have been found and compiled using the findText function
      * and its wrappers
