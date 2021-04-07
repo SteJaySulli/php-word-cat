@@ -968,7 +968,7 @@ class WordCatXML {
             $topLevel = $this->document->documentElement;
         }
         $find = $node;
-        while($find && !$find->parentNode->isSameNode($topLevel)) {
+        while($find && $find->parentNode && !$find->parentNode->isSameNode($topLevel)) {
             $find = $find->parentNode;
         }
         return $find;
