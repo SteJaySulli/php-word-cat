@@ -22,6 +22,9 @@ class WordCatXML {
     private $wordCat = null;
     private $document = null;
     private $searchResults = [];
+    private $searchFrom = null;
+    private $searchTo = null;
+    private $searchInside = null;
 
     /**
      * Constructor - Takes the owning WordCat object and the XML file path within
@@ -245,11 +248,131 @@ class WordCatXML {
      * Clear the internal search results. This can be chained with other search functions
      * in order to compile complicated searches.
      *
+     * You can optionally elect not to clear the range (searchFrom and searchTo) filters
+     * by providing false as an argument.
+     * 
+     * @param bool $clearRange
      * @return WordCatXML
      */
-    function clearSearch() {
+    function clearSearch(bool $clearRange = true) {
         $this->searchResults = [];
+        if($clearRange) {
+            $this->searchFrom = null;
+            $this->searchTo = null;
+            $this->searchInside = null;
+        }
         return $this;
+    }
+
+    /**
+     * Set the starting node from which (and including) search results will be returned
+     *
+     * @param DOMNode|null $node
+     * @return WordCatXML
+     */
+    function searchFrom(?DOMNode $node) {
+        $this->searchFrom = $node;
+        return $this;
+    }
+
+    /**
+     * Set the starting node up to which (and including) search results will be returned
+     *
+     * @param DOMNode|null $node
+     * @return WordCatXML
+     */
+    function searchTo(?DOMNode $node) {
+        $this->searchTo = $node;
+        return $this;
+    }
+
+    /**
+     * Set the node we want all search results to be within (but not including)
+     *
+     * @param DOMNode|null $node
+     * @return WordCatXML
+     */
+    function searchInside(?DOMNode $node) {
+        $this->searchInside = $node;
+        return $this;
+    }
+
+    /**
+     * Get the search results. This returns an array (not a DOMNodeList!) of
+     * elements which have been found and compiled using the findText function
+     * and its wrappers
+     *
+     * @return array[DOMNode]
+     */
+    function getSearch() {
+        return array_values(array_filter($this->searchResults, function( $node ) {
+            if(!$node instanceof DOMNode) {
+                return false;
+            }
+            if(!is_null($this->searchInside) && !$this->nodeIsDescendant($node, $this->searchInside)) {
+                // Node is not a descendant of the given node
+                return false;
+            }
+            if(!is_null($this->searchFrom) && $this->nodeIsBefore($node, $this->searchFrom)) {
+                // Node is before the "searchFrom" node
+                return false;
+            } 
+            if(!is_null($this->searchTo) && $this->nodeIsAfter($node, $this->searchTo)) {
+                // Node is after the "searchTo" node
+                return false;
+            }
+            return true;
+        }));
+    }
+
+    /**
+     * Run a callback for each node in the search results.
+     *
+     * @param function $callback
+     * @return WordCatXML
+     */
+    function forSearch($callback) {
+        foreach($this->getSearch() as $node) {
+            $callback($node);
+        }
+        return $this;
+    }
+
+    /**
+     * Search for nodes with the specified tag name, storing the list as an array
+     * in the search results which can then be obtained using getSearch().
+     * 
+     * Like all search features, this can be chained as it returns $this.
+     * 
+     * You can optionally append to search results, but it is better to use the
+     * andFindTagName alias as this is semantically clearer.
+     *
+     * @param string $tagName
+     * @param boolean $append
+     * @return WordCatXML
+     */
+    function findTagName(string $tagName, bool $append = false) {
+        if(!$append) {
+            $this->clearSearch(false);
+        }
+        $elements = [];
+        $all = $this->document->getElementsByTagName($tagName);
+        foreach($all as $node) {
+            $elements[] = $node;
+        }
+        $this->setSearch($elements, $append);
+        return $this;
+
+    }
+
+    /**
+     * An alias for findTagName which appends to the search results.
+     *
+     * @param string $tagName
+     * @return WordCatXML
+     */
+    function andFindTagName(string $tagName) {
+        return $this->findTagName($tagName, true);
     }
 
     /**
@@ -271,7 +394,7 @@ class WordCatXML {
      */
     function findText(string $find, bool $regex = false, bool $append = false) {
         if(!$append) {
-            $this->clearSearch();
+            $this->clearSearch(false);
         }
         $elements = [];
         $all = $this->document->getElementsByTagName("*");
@@ -302,7 +425,7 @@ class WordCatXML {
      * recommended that you use "andFindRegex" instead.
      *
      * @param string $find
-     * @param boolean $append
+     * @param bool $append
      * @return WordCatXML
      */
     function findRegex($find, $append = false) {
@@ -315,7 +438,7 @@ class WordCatXML {
      * "andFindRegex" instead (see below)
      *
      * @param string $find
-     * @param boolean $regex
+     * @param bool $regex
      * @return void
      */
     function andFindText($find, $regex=false) {
@@ -326,7 +449,7 @@ class WordCatXML {
      * Append any elements to the search list which match the given regular expression
      *
      * @param string $find
-     * @param boolean $regex
+     * @param bool $regex
      * @return void
      */
     function andFindRegex($find) {
@@ -348,14 +471,15 @@ class WordCatXML {
      *
      * @param string $find
      * @param string|function $replace
-     * @param boolean $regex
+     * @param bool $regex
      * @return WordCatXML
      */
-    function replaceText(string $find, $replace, $regex = false) {
-        if(count($this->searchResults) < 1) {
-            $this->findText($find, $regex);
+    function replaceText(string $find, $replace, bool $regex = false) {
+        $searchResults = $this->getSearch();
+        if(count($searchResults) < 1) {
+            $searchResults = $this->findText($find, $regex)->getSearch();
         }
-        foreach($this->searchResults as $node) {
+        foreach($searchResults as $node) {
             foreach($node->childNodes as $childNode) {
                 if($childNode instanceof DOMText) {
                     if(is_callable($replace)) {
@@ -425,17 +549,6 @@ class WordCatXML {
     }
 
     /**
-     * Get the search results. This returns an array (not a DOMNodeList!) of
-     * elements which have been found and compiled using the findText function
-     * and its wrappers
-     *
-     * @return array[DOMNode]
-     */
-    function getSearch() {
-        return $this->searchResults;
-    }
-
-    /**
      * Perform an xpath query on the XML document.
      *
      * It's worth noting there are currently namespace issues with XML files
@@ -455,19 +568,6 @@ class WordCatXML {
             $xpath->query($query);
         }
         return $xpath->query($query);
-    }
-
-    /**
-     * Run a callback for each node in the search results.
-     *
-     * @param function $callback
-     * @return WordCatXML
-     */
-    function forSearch($callback) {
-        foreach($this->searchResults as $node) {
-            $callback($node);
-        }
-        return $this;
     }
 
     /**
@@ -552,7 +652,7 @@ class WordCatXML {
      *
      * @param DOMNode $node
      * @param DOMNode $afterNode
-     * @return boolean
+     * @return bool
      */
     function nodeIsAfter(DOMNode $node, DOMNode $afterNode) {
         $getAllElements = $this->document->getElementsByTagName("*");
@@ -577,7 +677,7 @@ class WordCatXML {
      *
      * @param DOMNode $node
      * @param DOMNode $beforeNode
-     * @return boolean
+     * @return bool
      */
     function nodeIsBefore(DOMNode $node, DOMNode $beforeNode) {
         $getAllElements = $this->document->getElementsByTagName("*");
@@ -589,6 +689,44 @@ class WordCatXML {
             if($element->isSameNode($node)) {
                 return !$found;
             } 
+        }
+        return false;
+    }
+
+    /**
+     * Find out if a given node is a descendant of another given node
+     *
+     * @param DOMNode $node
+     * @param DOMNode $parent
+     * @return bool
+     */
+    function nodeIsDescendant(DOMNode $node, DOMNode $parent) {
+        $searchNode = $node;
+        while($searchNode = $searchNode->parentNode) {
+            if($searchNode->isSameNode($parent)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Find out if a given node contains another given node
+     *
+     * @param DOMNode $container
+     * @param DOMNode $contained
+     * @return bool
+     */
+    function nodeContainsNode(DOMNode $container, DOMNode $contained) {
+        if($container->isSameNode($contained)) {
+            return true;
+        }
+        if($container->hasChildNodes()) {
+            foreach($container->childNodes as $node) {
+                if($this->nodeContainsNode($node, $contained)) {
+                    return true;
+                }
+            }
         }
         return false;
     }
