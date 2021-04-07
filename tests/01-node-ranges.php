@@ -207,26 +207,34 @@ foreach($wordcat->getNodesByTagName("body") as $node) {
 // We can also specify what the top level is when getting a top level parent; lets
 // rebuild $paragraphs, adding each paragraph twice:
 $paragraphs = [];
-$wordcat->findText("Paragraph")->andFindText("Paragraph")->forSearch( function($node) use(&$paragraphs, $wordcat, $body) {
-    $paragraphs[] = $wordcat->getTopLevelParent($node, $body);
-});
+$wordcat->clearSearch()
+    ->findText("Paragraph")
+    ->andFindText("Paragraph")
+    ->forSearch( function($node) use(&$paragraphs, $wordcat, $body) {
+        $paragraphs[] = $wordcat->getTopLevelParent($node, $body);
+    });
 // Now we'll print the paragraphs to ensure we have them; we should see all paragraphs twice:
 foreach($paragraphs as $p) {
     echo "{$p->textContent}\n";
 }
 echo "\n";
 
-// We can remove duplicates in search results; note we are using the same search results here, we're just rebuilding the list:
-$paragraphs = [];
-$wordcat->searchUnique()->forSearch( function($node) use(&$paragraphs, $wordcat, $body) {
-    $paragraphs[] = $wordcat->getTopLevelParent($node, $body);
-});
+// We can remove duplicates in search results; note we are using the same search results here,
+// and we rebuild the list by using searchLambda:
+echo "Rebuild paragraph list using searchLambda and searchUnique\n";
+$paragraphs = $wordcat->clearSearch()
+    ->findText("Paragraph")
+    ->andFindText("Paragraph")
+    ->searchLambda( function($node) use(&$paragraphs, $wordcat, $body) {
+        return $wordcat->getTopLevelParent($node, $body);
+    })
+    ->searchUnique()
+    ->getSearch();
 // Now we'll print the paragraphs to ensure we have them; we should see all paragraphs twice:
 foreach($paragraphs as $p) {
     echo "{$p->textContent}\n";
 }
 echo "\n";
-
 
 
 $wordcat->close();

@@ -335,6 +335,35 @@ class WordCatXML {
     }
 
     /**
+     * Manipulate the search results by running a given callback on each item in the search
+     * results list.
+     * 
+     * It's important to note that the function will be run on all items in the search results
+     * which does not include searchFrom, searchTo or searchInside filters - this means that if
+     * your callback modifies the elements themselves you may modify more items than you had
+     * intended!
+     * 
+     * The callback should accept a DOMNode argument (the item in the search results),
+     * and return a DOMNode (the item to replace it with). A common use case for this is
+     * to find parent elements, or top level parents, of the elements within the search
+     * results.
+     *
+     * @param callable $callback
+     * @return WordCatXML
+     */
+    function searchLambda(callable $callback) {
+        $searchResults = [];
+        foreach($this->searchResults as $node) {
+            $result = $callback($node);
+            if($result instanceof DOMNode) {
+                $searchResults[]=$result;
+            }
+        }
+        $this->searchResults = $searchResults;
+        return $this;
+    }
+
+    /**
      * Get the search results. This returns an array (not a DOMNodeList!) of
      * elements which have been found and compiled using the findText function
      * and its wrappers
