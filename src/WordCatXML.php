@@ -6,13 +6,14 @@ use DOMNode;
 use DOMNodeList;
 use DOMText;
 use DOMXPath;
+use Exception;
 
 /**
  * WordCatXML Class
- * 
+ *
  * This class provides an abstracted interface to manipulate individual XML files within
  * a docx document.
- * 
+ *
  * These are instantiated by the WordCat class instance, and contain a link back to this
  * instance in order to function - in particular saving changes needs a WordCat object to
  * work.
@@ -25,6 +26,7 @@ class WordCatXML {
     private $searchFrom = null;
     private $searchTo = null;
     private $searchInside = null;
+    private $allElements = null;
 
     /**
      * Constructor - Takes the owning WordCat object and the XML file path within
@@ -182,6 +184,53 @@ class WordCatXML {
         return $parent->appendChild($node);
     }
 
+
+    /**
+     * Create a cache of elements (with tagnames); all operations which would normally
+     * use a full list of all elements in the document will then use this list instead
+     * until this is reset or unset.
+     *
+     * Note that any nodes you add or remove will not be added or removed from this list,
+     * so you will need to either call this method again or call operateOff if you then
+     * wish to use these features including the nodes you have added or removed.
+     *
+     * This function is provided to increase speed when doing filtered searches; in
+     * particular this is useful when you need to repeatedly work on a list of nodes
+     * which are between two other nodes (using nodeIsAfter, nodeIsBefore, filterNodesBetween),
+     * but it applies to anywhere that getElementsByTagName("*") would otherwise be used.
+     *
+     * @param array|DOMNodeList|null $nodes
+     * @return void
+     */
+    function operateOn($nodes = null) {
+        if(is_null($nodes)) {
+            $this->allElements = $this->document->getElementsByTagName("*");
+        }
+        $this->allElements = $nodes;
+    }
+
+    /**
+     * Remove the cached elements set by operateOn and return to using the full list of nodes
+     *
+     * @return void
+     */
+    function operateOff() {
+        $this->allElements = null;
+    }
+
+    /**
+     * Used internally in place of $this->document->getElementsByTagName("*") to provide cacheing
+     * when doing searches.
+     *
+     * @return array|DOMNodeList
+     */
+    private function getAllElements() {
+        if(is_null($this->allElements)) {
+            return $this->document->getElementsByTagName("*");
+        }
+        return $this->allElements;
+    }
+
     /**
      * Duplicates the given node within the document. This makes an identical copy of
      * the node and inserts it directly before the original node. The original node will
@@ -250,7 +299,7 @@ class WordCatXML {
      *
      * You can optionally elect not to clear the range (searchFrom and searchTo) filters
      * by providing false as an argument.
-     * 
+     *
      * @param bool $clearRange
      * @return WordCatXML
      */
@@ -266,7 +315,7 @@ class WordCatXML {
 
     /**
      * Set the starting node from which (and including) search results will be returned.
-     * 
+     *
      * Note that this filter is applied when you get the search results; the find routines
      * are not aware of this filter so changing this filter after you have search results
      * will effect the results of the search without the need to search again.
@@ -337,12 +386,12 @@ class WordCatXML {
     /**
      * Manipulate the search results by running a given callback on each item in the search
      * results list.
-     * 
+     *
      * It's important to note that the function will be run on all items in the search results
      * which does not include searchFrom, searchTo or searchInside filters - this means that if
      * your callback modifies the elements themselves you may modify more items than you had
      * intended!
-     * 
+     *
      * The callback should accept a DOMNode argument (the item in the search results),
      * and return a DOMNode (the item to replace it with). A common use case for this is
      * to find parent elements, or top level parents, of the elements within the search
@@ -371,24 +420,21 @@ class WordCatXML {
      * @return array[DOMNode]
      */
     function getSearch() {
-        return array_values(array_filter($this->searchResults, function( $node ) {
-            if(!$node instanceof DOMNode) {
-                return false;
-            }
-            if(!is_null($this->searchInside) && !$this->nodeIsDescendant($node, $this->searchInside)) {
-                // Node is not a descendant of the given node
-                return false;
-            }
-            if(!is_null($this->searchFrom) && $this->nodeIsBefore($node, $this->searchFrom)) {
-                // Node is before the "searchFrom" node
-                return false;
-            } 
-            if(!is_null($this->searchTo) && $this->nodeIsAfter($node, $this->searchTo)) {
-                // Node is after the "searchTo" node
-                return false;
-            }
-            return true;
-        }));
+        return array_values(
+            array_filter(
+                $this->filterNodesBetween($this->searchResults, $this->searchFrom, $this->searchTo),
+                function( $node ) {
+                    if(!$node instanceof DOMNode) {
+                        return false;
+                    }
+                    if(!is_null($this->searchInside) && !$this->nodeIsDescendant($node, $this->searchInside)) {
+                        // Node is not a descendant of the given node
+                        return false;
+                    }
+                    return true;
+                }
+            )
+        );
     }
 
     /**
@@ -407,9 +453,9 @@ class WordCatXML {
     /**
      * Search for nodes with the specified tag name, storing the list as an array
      * in the search results which can then be obtained using getSearch().
-     * 
+     *
      * Like all search features, this can be chained as it returns $this.
-     * 
+     *
      * You can optionally append to search results, but it is better to use the
      * andFindTagName alias as this is semantically clearer.
      *
@@ -442,11 +488,11 @@ class WordCatXML {
 
     /**
      * Search for nodes with a given attribute, optionally if it has the given value,
-     * storing the list as an array in the search results which can then be obtained 
+     * storing the list as an array in the search results which can then be obtained
      * using getSearch().
-     * 
+     *
      * Like all search features, this can be chained as it returns $this.
-     * 
+     *
      * You can optionally append to search results, but it is better to use the
      * andFindAttribute alias as this is semantically clearer.
      *
@@ -460,8 +506,7 @@ class WordCatXML {
             $this->clearSearch(false);
         }
         $elements = [];
-        $all = $this->document->getElementsByTagName("*");
-        foreach($all as $node) {
+        foreach($this->getAllElements() as $node) {
             if($node->hasAttributes()) {
                 if($node->hasAttribute($attribute)) {
                     if(is_null($value) || $node->getAttribute($attribute) == $value) {
@@ -508,8 +553,7 @@ class WordCatXML {
             $this->clearSearch(false);
         }
         $elements = [];
-        $all = $this->document->getElementsByTagName("*");
-        foreach($all as $node) {
+        foreach($this->getAllElements() as $node) {
             $found=false;
             foreach($node->childNodes as $childNode) {
                 if($childNode instanceof DOMText) {
@@ -574,10 +618,10 @@ class WordCatXML {
      *
      * You can also specify $replace as a function, in which case the function should
      * accept $find as a parameter, and should return a string.
-     * 
+     *
      * You can optionally use regex to search/replace, although it's recommended to use
      * the replaceRegex method below.
-     * 
+     *
      * As with all search functions this can be chained as it returns $this
      *
      * @param string $find
@@ -593,7 +637,7 @@ class WordCatXML {
         foreach($searchResults as $node) {
             foreach($node->childNodes as $childNode) {
                 if($childNode instanceof DOMText) {
-                    if(is_callable($replace)) {
+                    if(is_callable($replace) && !is_string($replace)) {
                         // As we have a callback, we want to call this for each time we find the string.
                         // The implementation for this varies depending on whether we are doing plain text or regex replacement:
                         if($regex) {
@@ -627,7 +671,7 @@ class WordCatXML {
                         } else {
                             $childNode->data = str_replace($find, $replace, $childNode->data);
                         }
-    
+
                     }
                 }
             }
@@ -638,17 +682,17 @@ class WordCatXML {
     /**
      * Find and replace text within XML nodes. This is a wrapper around the replaceText
      * method.
-     * 
-     * This will operate on the search results, replacing each instance of $find with 
-     * $replace. If no search has been performed, we will automatically perform the 
+     *
+     * This will operate on the search results, replacing each instance of $find with
+     * $replace. If no search has been performed, we will automatically perform the
      * search first.
      *
      * You can also specify $replace as a function, in which case the function should
      * accept $find as a parameter, and should return a string.
-     * 
+     *
      * You can optionally use regex to search/replace, although it's recommended to use
      * the replaceRegex method below.
-     * 
+     *
      * As with all search functions this can be chained as it returns $this
      *
      * @param string $find
@@ -728,35 +772,6 @@ class WordCatXML {
         }
         return $array;
     }
-    
-    /**
-     * Fix document sections after merge or insertion
-     * 
-     * Document sections are defined by a w:sectPr element which has links to the relevant 
-     * page layout and headers/footers. Each section needs to have this inside the last
-     * paragraph of a document, except the last one which is a child of w:body.
-     * 
-     * This function ensures that if there are more than one w:sectPr elements as a child of
-     * w:body, all but the last one will be inserted within its own paragraph.
-     *
-     * @return void
-     */
-    function fixDocumentSections() {
-        $sectPrs = $this->document->getElementsByTagName("sectPr");
-        $count = count($sectPrs);
-        foreach($sectPrs as $index => $sectPr) {
-            if($sectPr->parentNode && $sectPr->parentNode->nodeName == "w:body") {
-                if($index < $count-1) {
-                    $p = $this->insertNodeAfter($this->createNode("w:p"), $sectPr);
-                    $pPr = $this->insertNodeInside($this->createNode("w:pPr"), $p);
-                    $newSectPr = $this->cloneNode($sectPr);
-                    $pPr->appendChild($newSectPr);
-                    $this->removeNode($sectPr);
-                }
-            }
-
-        }
-    }
 
     /**
      * Find out if a given node appears later in the document than another
@@ -767,9 +782,8 @@ class WordCatXML {
      * @return bool
      */
     function nodeIsAfter(DOMNode $node, DOMNode $afterNode) {
-        $getAllElements = $this->document->getElementsByTagName("*");
         $found = false;
-        foreach($getAllElements as $index => $element) {
+        foreach($this->getAllElements() as $index => $element) {
             if(!$found) {
                 if( $element->isSameNode($afterNode) ) {
                     $found = true;
@@ -792,17 +806,59 @@ class WordCatXML {
      * @return bool
      */
     function nodeIsBefore(DOMNode $node, DOMNode $beforeNode) {
-        $getAllElements = $this->document->getElementsByTagName("*");
         $found = false;
-        foreach($getAllElements as $index => $element) {
+        foreach($this->getAllElements() as $index => $element) {
             if( $element->isSameNode($beforeNode) ) {
                 $found = true;
             }
             if($element->isSameNode($node)) {
                 return !$found;
-            } 
+            }
         }
         return false;
+    }
+
+    /**
+     * Filter an array of nodes down to just the nodes that appear between a start and end
+     * node in the tree. The start and end nodes are included in the resulting array of nodes.
+     *
+     * You can omit the start or end (or specify null) to just filter everything from the start
+     * or up to the end node.
+     *
+     * Because finding a relative position in the tree is an expensive operation, using this
+     * function can prove useful when trying to increase performance.
+     *
+     * If $nodes is set to null, all nodes between the $start and $end are returned.
+     *
+     * @param array $nodes
+     * @param DOMNode|null $start
+     * @param DOMNode|null $end
+     * @return array[DOMNode]
+     */
+    function filterNodesBetween(?array $nodes = null, ?DOMNode $start = null, ?DOMNode $end = null) {
+        $filtered = [];
+        $foundStart = is_null($start);
+        foreach($this->getAllElements() as $node) {
+            if(!$foundStart && $node->isSameNode($start)) {
+                $foundStart = true;
+            }
+            if($foundStart) {
+                if(!is_null($nodes)) {
+                    foreach($nodes as $index => $findNode) {
+                        if($node->isSameNode($findNode)) {
+                            unset($nodes[$index]);
+                            $filtered[] = $node;
+                        }
+                    }
+                } else {
+                    $filtered[] = $node;
+                }
+            }
+            if(!is_null($end) && $node->isSameNode($end)) {
+                return $filtered;
+            }
+        }
+        return $filtered;
     }
 
     /**
@@ -862,9 +918,8 @@ class WordCatXML {
      * @return void
      */
     function getNextTagName(string $tagName, DOMNode $afterNode) {
-        $getAllElements = $this->document->getElementsByTagName("*");
         $found = false;
-        foreach($getAllElements as $index => $element) {
+        foreach($this->getAllElements() as $index => $element) {
             if(!$found) {
                 if( $element->isSameNode($afterNode) ) {
                     $found = true;
@@ -885,9 +940,8 @@ class WordCatXML {
      * @return void
      */
     function getPreviousTagName(string $tagName, DOMNode $beforeNode) {
-        $getAllElements = $this->document->getElementsByTagName("*");
         $found = null;
-        foreach($getAllElements as $index => $element) {
+        foreach($this->getAllElements() as $index => $element) {
             if( $element->isSameNode($beforeNode) ) {
                 return $found;
             }
@@ -899,20 +953,47 @@ class WordCatXML {
 
     /**
      * This function will insert a new section after the specified node.
-     * 
-     * This works by finding the final sectPr element, and copying it to a new paragraph
-     * after the insertion point.
+     *
+     * You can specify a specific sectPr to copy and insert; if you omit this,
+     * the final sectPr will be used by default.
+     *
+     * On success, the new paragraph (w:p) element is returned
+     *
+     * You can also specify a callback, which will be passed the sectPr we are copying
+     * and the new sectPr we create (in that order), allowing the sectPrs to be modified.
+     *
+     * The callback will only be run if we have successfully inserted a sectPr.
      *
      * @param DOMElement $insertAfter
+     * @param bool $sectPr
+     * @param callable $callback
      * @return DOMElement|void
      */
-    function splitSection(DOMElement $insertAfter) {
+    function splitSection(DOMElement $insertAfter, ?DOMNode $sectPr = null, ?callable $callback = null) {
+        if(!$sectPr) {
+            $sectPrs = $this->document->getElementsByTagName("sectPr");
+            if($sectPrs->count() > 0) {
+                $sectPr = $sectPrs->item($sectPrs->count()-1);
+            }
+        }
+        // Now if we have a sectPr element, we copy it:
+        if($sectPr) {
+            // This is the correct sectPr
+            $p = $this->insertNodeAfter($this->createNode("w:p"), $insertAfter);
+            $pPr = $this->insertNodeInside($this->createNode("w:pPr"), $p);
+            $newSectPr = $this->cloneNode($sectPr);
+            $pPr->appendChild($newSectPr);
+            if(is_callable($callback)) {
+                $callback($sectPr, $newSectPr);
+            }
+            return $p;
+        }
+        return;
+
 
         $insertAfter->setAttribute("wordcat_id", "splitsection");
-
-        $getAllElements = $this->document->getElementsByTagName("*");
         $found = false;
-        foreach($getAllElements as $index => $element) {
+        foreach($this->getAllElements() as $index => $element) {
             if(!$found) {
                 if($element->hasAttribute("wordcat_id") && $element->getAttribute("wordcat_id") == "splitsection") {
                     $element->removeAttribute("wordcat_id");
@@ -936,9 +1017,105 @@ class WordCatXML {
         }
     }
 
+    function normaliseSectionHeaderFooter(DOMElement $section, string $type = "default") {
+        if($section->nodeName != "w:sectPr") {
+            $sectPrs = $section->getElementsByTagName("sectPr");
+            if($sectPrs->count()>0) {
+                $section = $sectPrs->item(0);
+            }
+        }
+        if($section->nodeName != "w:sectPr") {
+            throw Exception("No sectPr tag found");
+        }
+        $headers = $section->getElementsByTagName("headerReference");
+        $footers = $section->getElementsByTagName("footerReference");
+        // Find given header:
+        $header = null;
+        foreach($headers as $node) {
+            if($node->hasAttribute("w:type") && $node->getAttribute("w:type") == $type) {
+                $header = $node;
+                break;
+            }
+        }
+        if(!is_null($header)) {
+            $firstHeader = $this->cloneNode($header);
+            $oddHeader = $this->cloneNode($header);
+            $firstHeader->setAttribute("w:type", "first");
+            $oddHeader->setAttribute("w:type", "first");
+            $this->insertNodeAfter($firstHeader, $header);
+            $this->insertNodeAfter($oddHeader, $header);
+            foreach($headers as $node) {
+                if(!$node->isSameNode($header)) {
+                    $this->removeNode($node);
+                }
+            }
+        }
+        // Find given footer:
+        $footer = null;
+        foreach($footers as $node) {
+            if($node->hasAttribute("w:type") && $node->getAttribute("w:type") == $type) {
+                $footer = $node;
+                break;
+            }
+        }
+        if(!is_null($footer)) {
+            $firstFooter = $this->cloneNode($footer);
+            $oddFooter = $this->cloneNode($footer);
+            $firstFooter->setAttribute("w:type", "first");
+            $oddFooter->setAttribute("w:type", "first");
+            $this->insertNodeAfter($firstFooter, $footer);
+            $this->insertNodeAfter($oddFooter, $footer);
+            foreach($footers as $node) {
+                if(!$node->isSameNode($footer)) {
+                    $this->removeNode($node);
+                }
+            }
+        }
+
+    }
+
+    /**
+     * Fix document sections after merge or insertion
+     *
+     * Document sections are defined by a w:sectPr element which has links to the relevant
+     * page layout and headers/footers. Each section needs to have this inside the last
+     * paragraph of a document, except the last one which is a child of w:body.
+     *
+     * This function ensures that if there are more than one w:sectPr elements as a child of
+     * w:body, all but the last one will be inserted within its own paragraph.
+     *
+     * If you specify $replacedNode and this node is replaced, the replacement will be returned;
+     * this allows you to ensure that you can maintain an insertion point if the document is
+     * changed.
+     *
+     * @param DOMNode $replacedNode
+     * @return DOMNode|null
+     */
+    function fixDocumentSections(?DOMNode $replacedNode=null) {
+        $sectPrs = $this->document->getElementsByTagName("sectPr");
+        $count = $sectPrs->count();
+        foreach($sectPrs as $index => $sectPr) {
+            if($sectPr->parentNode && $sectPr->parentNode->nodeName == "w:body") {
+                if($index < $count-1) {
+                    $p = $this->insertNodeAfter($this->createNode("w:p"), $sectPr);
+                    $pPr = $this->insertNodeInside($this->createNode("w:pPr"), $p);
+                    $newSectPr = $this->cloneNode($sectPr);
+                    $pPr->appendChild($newSectPr);
+                    if(!is_null($replacedNode) && $sectPr->isSameNode($replacedNode)) {
+                        $replacedNode = $p;
+                    }
+                    $this->removeNode($sectPr);
+                }
+            }
+
+        }
+        return $replacedNode;
+    }
+
+
     /**
      * Iterate from parent to parent until you find a node matching the given tag name.
-     * 
+     *
      * This allows us, for example, to find the w:p node that contains a given w:t element.
      *
      * @param string $tagName
@@ -955,9 +1132,9 @@ class WordCatXML {
 
     /**
      * Get the parent node at the top level (root node).
-     * 
+     *
      * You can optionally specify the top level node; for instance you may want the parent
-     * that is a child of the w:body node rather than the w:document 
+     * that is a child of the w:body node rather than the w:document
      *
      * @param DOMNode $node
      * @param DOMNode|null $topLevel
