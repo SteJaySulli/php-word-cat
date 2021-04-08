@@ -9,16 +9,16 @@ use ZipArchive;
 
 /**
  * WordCat Class
- * 
+ *
  * This class provides the API to deal with docx documents as a whole.
- * 
+ *
  * The methods provided are primarily geared to dealing with the main document itself;
  * The methods of the main document's WordCatXML object are exposed as a convenience.
- * 
+ *
  * I may remove this behaviour at a later date, as I only did this to expose certain
  * elements which should really have their own wrapper methods instead, so please do
  * not rely on this as a permanent feature!
- * 
+ *
  */
 class WordCat {
 
@@ -454,12 +454,13 @@ class WordCat {
      * This isn't usually a problem when inserting into a placeholder, but it does
      * not allow you to insert the document content within a table cell (for example);
      * it would appear after the block the table is in.
-     *
-     * @param WordCat $source
-     * @param DOMNode $afterNode
-     * @return void
-     */
-    function insertDocument(WordCat $source, $afterNode) {
+    *
+    * @param WordCat $source
+    * @param DOMNode $afterNode
+    * @param bool $splitSections
+    * @return DOMNode
+    */
+    function insertDocument(WordCat $source, DOMNode $afterNode, bool $splitSections = false) {
         $this->mergeStyles($source);
         $this->mergeRelationships($source);
         $sDoc = $source->getXML("word/document.xml");
@@ -468,18 +469,25 @@ class WordCat {
 
         $after=$afterNode;
 
-        if($sect = $dDoc->splitSection($afterNode)) {
-            $after = $sect;
+        if($splitSections) {
+            if($sect = $dDoc->splitSection($afterNode)) {
+                $after = $sect;
+            }
         }
 
+        // Find the top-level node for the insertion point
         while($after->parentNode && $after->parentNode->nodeName != "w:body") {
             $after = $after->parentNode;
         }
+        // Insert all nodes from the source to destination
         foreach($sBody->childNodes as $node) {
             $after = $dDoc->importNodeAfter($node, $after);
         }
-        $dDoc->fixDocumentSections();
+
+        $after = $dDoc->fixDocumentSections($after);
+
         $dDoc->store();
+        return $after;
     }
 
     /**
