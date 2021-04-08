@@ -147,7 +147,12 @@ class WordCat {
 
         }
         $this->archive->close();
-        copy($this->tempName, $filename);
+        // We need to manually set the general purpose bits within the file header
+        // so it can be correctly identified as a docx file:
+        $contents = file_get_contents($this->tempName);
+        $contents[6] = "\x6";
+        $contents[7] = "\x0";
+        file_put_contents($filename, $contents);
         $this->archive->open($this->tempName);
         // If we have used a different filename to the one we loaded, update the name so subsequent
         // calls to save() don't overwrite the original file!
