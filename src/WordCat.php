@@ -484,13 +484,11 @@ class WordCat {
 
                 $sName = $node->getAttribute("Target");
                 if($source->statArchive("word/$sName") !== false) {
-                    Log::debug("Found file $sName");
                     $fileHash = null;
                     if($this->statArchive("word/$sName") !== false) {
                         $fileHash = hash("sha256", $source->readFile("word/$sName"));
                     }
                     $dName =Util::genericNextId($sName, '/^(.*[^0-9])([0-9]*)(\\..+)+$/i', 2, function ($dName) use($fileHash) {
-                        Log::debug("Checking for $dName...");
                         if($this->statArchive("word/$dName") !== false) {
                             if($fileHash && $fileHash == hash("sha256", $this->readFile("word/$dName"))) {
                                 return null;
@@ -505,7 +503,6 @@ class WordCat {
                             $node->setAttribute("Target", $dName);
                         }
                         $this->writeFile("word/$dName", $source->readFile("word/$sName"));
-                        Log::debug("Written file $sName to $dName");
                     } else {
                         $this->writeFile("word/$sName", $source->readFile("word/$sName"));
                     }
