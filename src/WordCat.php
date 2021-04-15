@@ -142,17 +142,13 @@ class WordCat {
             throw new NoDocumentException;
         }
         // Ensure all parts are updated to zip first...
-        foreach($this->parts as $part) {
+        foreach($this->parts as $partName => $part) {
             $part->store();
 
         }
+        
         $this->archive->close();
-        // We need to manually set the general purpose bits within the file header
-        // so it can be correctly identified as a docx file:
-        $contents = file_get_contents($this->tempName);
-        $contents[6] = "\x6";
-        $contents[7] = "\x0";
-        file_put_contents($filename, $contents);
+        copy($this->tempName, $filename);
         $this->archive->open($this->tempName);
         // If we have used a different filename to the one we loaded, update the name so subsequent
         // calls to save() don't overwrite the original file!
@@ -202,7 +198,7 @@ class WordCat {
      * @param string $path
      * @return string
      */
-    function readFile(string $path) {
+    function readFile($path) {
         if(!$this->archive instanceof ZipArchive) {
             throw new NoDocumentException;
         }
@@ -220,11 +216,95 @@ class WordCat {
         if(!$this->archive instanceof ZipArchive) {
             throw new NoDocumentException;
         }
+        if($this->archive->statName($path)) {
+            $this->archive->deleteName($path);
+        }
         if($this->archive->addFromString($path, $content)) {
             return true;
         } else {
             return false;
         }
+    }
+
+
+    /**
+     * Get a directory listing of the entire document archive. An array structure is returned
+     * with array keys as filenames and leaf values as the file index within the archive.
+     * 
+     * The directory is returned in a hierarchy, like this:
+     * [
+     *      "_rels" = > [
+     *          ".rels" => 0
+     *      ],
+     *      "word" => [
+     *          "document.xml" => 1,
+     *          "header1.xml" => 2,
+     *          "media" => [
+     *              "image1.jpg"
+     *          ]
+     *      ]
+     * ]
+     *
+     * You can provide a callback which can post-process the returned array structure; the
+     * callback takes the directory structure (array) as a parameter and returns the altered
+     * directory structure.
+     * 
+     * You can use some of the functions in the Util class:
+     * 
+     * $this->directory(null, function(&$dir) { Util::sortDirectoriesFirst($dir); return $dir; });
+     * $this->directory(null, function(&$dir) { 
+     *      return Util::flattenDirectoryArray($dir, true);
+     * });
+     * 
+     * @param string|null $path
+     * @param callable|null $callback
+     * @return array
+     */
+    function directory(?string $path = null, ?callable $callback = null) {
+        if(!$this->archive instanceof ZipArchive) {
+            throw new NoDocumentException;
+        }
+        
+        $fileCount = $this->archive->numFiles;
+        $dir = [];
+        // Strip leading and trailing slashes
+        if(substr($path, 0, 1) == "/") $path = substr($path,1);
+        if(substr($path, -1 ) == "/") $path = substr($path,0,-1);
+        // Iterate through all file names within archive
+        for($fileId=0; $fileId < $fileCount; $fileId ++) {
+            if($this->archive->statIndex($fileId) !== false) {
+                $name = $fname = $this->archive->getNameIndex($fileId);
+                // If we specified a path we only want to add those files to the directory
+                if(!empty($path)) {
+                    if( substr($name,0,strlen($path)) == $path ) {
+                        // if the name of this file begins with our path, we will include it...
+                        $name = substr($name, strlen($path));
+                    } else {
+                        // Otherwise we move on to the next file
+                        continue;
+                    }
+                }
+                // Split path for processing
+                $pathParts = explode('/',$name);
+                $entry = null;
+                // Build directory array structure for this path from the end back towards root...
+                foreach(array_reverse($pathParts) as $part) {
+                    if(is_null($entry)) {
+                        // Top level is a file
+                        $entry = [$part => $fileId];
+                    } else {
+                        // Otherwise it's a directory
+                        $entry = ["$part/" => $entry] ;
+                    }
+                }
+                $dir = array_merge_recursive($dir, $entry);
+            }
+        }
+
+        if(is_callable($callback)) {
+            return $callback($dir);
+        }
+        return $dir;
     }
 
     /**
@@ -404,27 +484,30 @@ class WordCat {
 
                 $sName = $node->getAttribute("Target");
                 if($source->statArchive("word/$sName") !== false) {
-                    $dName = $sName;
-                    // If the file already exists, we need to change it...
-                    $n = 0;
-                    while($this->statArchive("word/$dName") !== false) {
-                        $n++;
-                        $dName=$sName;
-                        if(($pos = strrpos($sName, '/'))!==false) {
-                            $dName=substr($sName, 0, $pos+1) . "i$n-" . substr($sName, $pos+1);
-
-                        } else {
-                            $dName = "i$n-$sName";
+                    $fileHash = null;
+                    if($this->statArchive("word/$sName") !== false) {
+                        $fileHash = hash("sha256", $source->readFile("word/$sName"));
+                    }
+                    $dName =Util::genericNextId($sName, '/^(.*[^0-9])([0-9]*)(\\..+)+$/i', 2, function ($dName) use($fileHash) {
+                        if($this->statArchive("word/$dName") !== false) {
+                            if($fileHash && $fileHash == hash("sha256", $this->readFile("word/$dName"))) {
+                                return null;
+                            }
+                            return true;
                         }
+                        return false;
+                    });
+                    if(!is_null($dName)) {
+                        // If the filename has changed, we need to change the reference to it...
+                        if($dName != $sName) {
+                            $node->setAttribute("Target", $dName);
+                        }
+                        $this->writeFile("word/$dName", $source->readFile("word/$sName"));
+                    } else {
+                        $this->writeFile("word/$sName", $source->readFile("word/$sName"));
                     }
-                    // If the filename has changed, we need to change the reference to it...
-                    if($dName != $sName) {
-                        $node->setAttribute("Target", $dName);
-                    }
-                    $this->writeFile("word/$dName", $source->readFile("word/$sName"));
                 }
                 $dDoc->importNodeInside($node, $dNode);
-            } else {
             }
         }
         $sDoc = $source->getXML("word/document.xml");
@@ -470,7 +553,6 @@ class WordCat {
         $this->mergeRelationships($source);
         $sDoc = $source->getXML("word/document.xml");
         $dDoc = $this->getXML("word/document.xml");
-        $sBody = $sDoc->getNodesByTagName("body")[0];
 
         $after=$afterNode;
 
@@ -478,7 +560,14 @@ class WordCat {
             if($sect = $dDoc->splitSection($afterNode)) {
                 $after = $sect;
             }
+        } else {
+            // Remove all sections from source node
+            foreach($sDoc->getNodesByTagName("sectPr") as $node) {
+                $sDoc->removeNode($node);
+            }
         }
+
+        $sBody = $sDoc->getNodesByTagName("body")[0];
 
         // Find the top-level node for the insertion point
         while($after->parentNode && $after->parentNode->nodeName != "w:body") {
@@ -489,7 +578,9 @@ class WordCat {
             $after = $dDoc->importNodeAfter($node, $after);
         }
 
-        $after = $dDoc->fixDocumentSections($after);
+        if($splitSections) {
+            $after = $dDoc->fixDocumentSections($after);
+        }
 
         $dDoc->store();
         return $after;
@@ -580,6 +671,23 @@ class WordCat {
         return $returnNode;
     }
 
+    function insertPageBreak(DOMNode $insertionNode) {
+        $xml = $this->getXML("word/document.xml");
+        $node =$xml->createNode("w:p");
+        while($insertionNode->nodeName != "w:body" && $insertionNode->parentNode && $insertionNode->parentNode->nodeName != "w:body") {
+            $insertionNode = $insertionNode->parentNode;
+        }
+        if($insertionNode->nodeName == "w:body") {
+            $returnNode = $xml->insertNodeInside($node, $insertionNode);
+        } else {
+            $returnNode = $xml->insertNodeAfter($node, $insertionNode);
+        }
+
+        $run = $this->insertRun($returnNode);
+        $break = $xml->insertNodeInside( $xml->createNode("w:br",["w:type" => "page"] ), $run);
+        return $returnNode;
+    }
+
     /**
      * This function inserts an image after a given node. This will use a very basic image definition
      * to provide the minimum possible implementation that can insert an image.
@@ -599,26 +707,25 @@ class WordCat {
      * @param string $title
      * @return DOMNode
      */
-    function insertImage(string $imageFile, DOMNode $insertionNode, $width=null, $height=null, $title="") {
+    function insertImage(string $imageFile, DOMNode $insertionNode, $width=null, $height=null, $title="", $fileName=null) {
         $xml = $this->getXML("word/document.xml");
         $rel = $this->getXML("word/_rels/document.xml.rels");
         $id = $this->newResourceId();
+        $imgInfo = getimagesize($imageFile);
         // Figure out a filename for the image within the archive
-        $sName = $dName = "media/".substr(basename($imageFile), -16);
+        if(is_null($fileName)) {
+            $fileName = substr(basename($imageFile), -16);
+        }
+        // Sometimes filenames don't have the correct extensions; try to guess from the mime:
+        if(!preg_match('/\.jpe?g$/i', $fileName) && strtolower($imgInfo["mime"]) == "image/jpeg") {
+            $fileName .= ".jpeg";
+        }
+        if(!preg_match('/\.jpe?g$/i', $fileName) && strtolower($imgInfo["mime"]) == "image/png") {
+            $fileName .= ".png";
+        }
+        $sName = $dName = "media/".$fileName;
         if($this->statArchive("word/$sName") !== false) {
-            $dName = $sName;
-            // If the file already exists, we need to change it...
-            $n = 0;
-            while($this->statArchive("word/$dName") !== false) {
-                $n++;
-                $dName=$sName;
-                if(($pos = strrpos($sName, '/'))!==false) {
-                    $dName=substr($sName, 0, $pos+1) . "i$n-" . substr($sName, $pos+1);
-
-                } else {
-                    $dName = "a$n-$sName";
-                }
-            }
+            $dName =Util::genericNextId($sName, '/^(media\\/.*[^0-9])([0-9]*)(\\..+)+$/i', 2, function ($dName) { return $this->statArchive("word/$dName") !== false; });
         }
         // Add the file to the archive:
         $this->writeFile("word/$dName", file_get_contents($imageFile));
@@ -632,7 +739,6 @@ class WordCat {
             $rel->getDOMDocument()->documentElement
         );
         // Set up the image details
-        $imgInfo = getimagesize($imageFile);
         $ratio = $imgInfo[0] / $imgInfo[1];
         if(is_null($width) && is_null($height)) {
             $width = 300;

@@ -1112,7 +1112,6 @@ class WordCatXML {
         return $replacedNode;
     }
 
-
     /**
      * Iterate from parent to parent until you find a node matching the given tag name.
      *
