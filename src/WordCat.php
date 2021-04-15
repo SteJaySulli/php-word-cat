@@ -484,12 +484,20 @@ class WordCat {
 
                 $sName = $node->getAttribute("Target");
                 if($source->statArchive("word/$sName") !== false) {
+                    Log::debug("Found file $sName");
+                    $fileHash = null;
                     if($this->statArchive("word/$sName") !== false) {
-                        $fileHash = hash("sha256", $this->readFile("word/$sName"));
+                        $fileHash = hash("sha256", $source->readFile("word/$sName"));
                     }
-                    $dName =Util::genericNextId($sName, '/^(.*[^0-9])([0-9]*)(\\..+)+$/i', 2, function ($dName) use($fileHash) { 
-                        
-                        return $this->statArchive("word/$dName") !== false; 
+                    $dName =Util::genericNextId($sName, '/^(.*[^0-9])([0-9]*)(\\..+)+$/i', 2, function ($dName) use($fileHash) {
+                        Log::debug("Checking for $dName...");
+                        if($this->statArchive("word/$dName") !== false) {
+                            if($fileHash && $fileHash == hash("sha256", $this->readFile("word/$dName"))) {
+                                return null;
+                            }
+                            return true;
+                        }
+                        return false;
                     });
                     if(!is_null($dName)) {
                         // If the filename has changed, we need to change the reference to it...
@@ -497,6 +505,9 @@ class WordCat {
                             $node->setAttribute("Target", $dName);
                         }
                         $this->writeFile("word/$dName", $source->readFile("word/$sName"));
+                        Log::debug("Written file $sName to $dName");
+                    } else {
+                        $this->writeFile("word/$sName", $source->readFile("word/$sName"));
                     }
                 }
                 $dDoc->importNodeInside($node, $dNode);
@@ -545,7 +556,6 @@ class WordCat {
         $this->mergeRelationships($source);
         $sDoc = $source->getXML("word/document.xml");
         $dDoc = $this->getXML("word/document.xml");
-        $sBody = $sDoc->getNodesByTagName("body")[0];
 
         $after=$afterNode;
 
@@ -559,6 +569,8 @@ class WordCat {
                 $sDoc->removeNode($node);
             }
         }
+
+        $sBody = $sDoc->getNodesByTagName("body")[0];
 
         // Find the top-level node for the insertion point
         while($after->parentNode && $after->parentNode->nodeName != "w:body") {
@@ -681,12 +693,15 @@ class WordCat {
      * @param string $title
      * @return DOMNode
      */
-    function insertImage(string $imageFile, DOMNode $insertionNode, $width=null, $height=null, $title="") {
+    function insertImage(string $imageFile, DOMNode $insertionNode, $width=null, $height=null, $title="", $fileName=null) {
         $xml = $this->getXML("word/document.xml");
         $rel = $this->getXML("word/_rels/document.xml.rels");
         $id = $this->newResourceId();
         // Figure out a filename for the image within the archive
-        $sName = $dName = "media/".substr(basename($imageFile), -16);
+        if(is_null($fileName)) {
+            $fileName = substr(basename($imageFile), -32);
+        }
+        $sName = $dName = "media/".$fileName;
         if($this->statArchive("word/$sName") !== false) {
             $dName =Util::genericNextId($sName, '/^(media\\/.*[^0-9])([0-9]*)(\\..+)+$/i', 2, function ($dName) { return $this->statArchive("word/$dName") !== false; });
         }
