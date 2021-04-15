@@ -671,6 +671,23 @@ class WordCat {
         return $returnNode;
     }
 
+    function insertPageBreak(DOMNode $insertionNode) {
+        $xml = $this->getXML("word/document.xml");
+        $node =$xml->createNode("w:p");
+        while($insertionNode->nodeName != "w:body" && $insertionNode->parentNode && $insertionNode->parentNode->nodeName != "w:body") {
+            $insertionNode = $insertionNode->parentNode;
+        }
+        if($insertionNode->nodeName == "w:body") {
+            $returnNode = $xml->insertNodeInside($node, $insertionNode);
+        } else {
+            $returnNode = $xml->insertNodeAfter($node, $insertionNode);
+        }
+
+        $run = $this->insertRun($returnNode);
+        $break = $xml->insertNodeInside( $xml->createNode("w:br",["w:type" => "page"] ), $run);
+        return $returnNode;
+    }
+
     /**
      * This function inserts an image after a given node. This will use a very basic image definition
      * to provide the minimum possible implementation that can insert an image.
