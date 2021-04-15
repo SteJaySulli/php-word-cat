@@ -697,9 +697,17 @@ class WordCat {
         $xml = $this->getXML("word/document.xml");
         $rel = $this->getXML("word/_rels/document.xml.rels");
         $id = $this->newResourceId();
+        $imgInfo = getimagesize($imageFile);
         // Figure out a filename for the image within the archive
         if(is_null($fileName)) {
-            $fileName = substr(basename($imageFile), -32);
+            $fileName = substr(basename($imageFile), -16);
+        }
+        // Sometimes filenames don't have the correct extensions; try to guess from the mime:
+        if(!preg_match('/\.jpe?g$/i', $fileName) && strtolower($imgInfo["mime"]) == "image/jpeg") {
+            $fileName .= ".jpeg";
+        }
+        if(!preg_match('/\.jpe?g$/i', $fileName) && strtolower($imgInfo["mime"]) == "image/png") {
+            $fileName .= ".png";
         }
         $sName = $dName = "media/".$fileName;
         if($this->statArchive("word/$sName") !== false) {
@@ -717,7 +725,6 @@ class WordCat {
             $rel->getDOMDocument()->documentElement
         );
         // Set up the image details
-        $imgInfo = getimagesize($imageFile);
         $ratio = $imgInfo[0] / $imgInfo[1];
         if(is_null($width) && is_null($height)) {
             $width = 300;
