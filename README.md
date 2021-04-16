@@ -36,7 +36,7 @@ It should be possible to use the library without composer, but this has not been
 
 # Usage
 
-A nice example of all the basic features are available in [test/example.php](./test/example.php) - It is adviseable to check that out for proper usage details. Just so you can get a feel for the kind of code you'll be writing with WordCat, here's a brief example though:
+A nice example of all the basic features are available in [tests/example.php](./tests/example.php) - It is adviseable to check that out for proper usage details. Just so you can get a feel for the kind of code you'll be writing with WordCat, here's a brief example though:
 
 ```php
 <?php
