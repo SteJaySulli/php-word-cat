@@ -1,4 +1,4 @@
-# WordCat - WORK IN PROGRESS
+# WordCat - BETA
 A simple php library for manipulation of docx word processed document; in particular the library is designed to allow content from one document to be inserted into another document, and it also provides some features allowing for searching and replacing content, and inserting new text and images.
 
 # Dependencies
@@ -29,7 +29,7 @@ As this library was designed to solver some fairly specific issues, it will not 
 You can install this library using composer:
 
 ```bash
-composer install stejaysulli/php-word-cat
+composer require stejaysulli/php-word-cat
 ```
 
 It should be possible to use the library without composer, but this has not been tested and you will need to provide your own method to autoload the files in the `src` directory.
