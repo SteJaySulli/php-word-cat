@@ -417,7 +417,7 @@ class WordCatXML {
      * elements which have been found and compiled using the findText function
      * and its wrappers
      *
-     * @return array[DOMNode]
+     * @return array
      */
     function getSearch() {
         return array_values(
@@ -594,7 +594,7 @@ class WordCatXML {
      *
      * @param string $find
      * @param bool $regex
-     * @return void
+     * @return WordCatXML
      */
     function andFindText($find, $regex=false) {
         return $this->findText($find, $regex, true);
@@ -605,10 +605,87 @@ class WordCatXML {
      *
      * @param string $find
      * @param bool $regex
-     * @return void
+     * @return WordCatXML
      */
     function andFindRegex($find) {
         return $this->findText($find, true, true);
+    }
+
+    /**
+     * Search for text within paragraphs and merge all text elements together that
+     * encompass the searched text.
+     * 
+     * This is useful if you need to search and replace text, but the text is not
+     * stored contiguously in a single w:t element (this is often the case when a
+     * user goes back and edits a paragraph; the word processor will often split
+     * the text where the edit was made even if only the text is changed).
+     * 
+     * Note that this function is destructive; it will remove all elements between
+     * the first and last elements needed to match the given text, effectively
+     * replacing them all with a single w:t element.
+     * 
+     * The matching paragraphs will be stored in the internal search results, so
+     * there is no need to do an additional findText (or similar) afterwards.
+     * 
+     * You should be able to use replaceText (or similar) to then make any
+     * replacement you need to.
+     *
+     * @param string $find
+     * @param boolean $regex
+     * @return WordCatXML
+     */
+    function findAndMergeParagraphText(string $find, $regex = false, $append = false) {
+        $elements = [];
+        $all = $this->document->getElementsByTagName('p');
+        foreach($all as $node) {
+            $textNodes = $node->getElementsByTagName('t');
+            $text="";
+            $chunks = [];
+            $lastNode = null;
+            foreach($textNodes as $index => $textNode) {
+                $chunks[$index] = strlen($text);
+                $text.=$textNode->textContent;
+                if( ($regex && preg_match($find, $text)) || (!$regex && strpos($text, $find) !== false)) {
+                    $lastNode = $textNode;
+                    foreach($chunks as $chunkIndex => $position) {
+                        if( ($regex && preg_match($find, substr($text,$position))) || (!$regex && strpos(substr($text,$position), $find) !== false)) {
+                            $firstNode = $textNodes[$chunkIndex];
+                        } else {
+                            break;
+                        }
+                    }
+                    if($lastNode && $firstNode) {
+                        $filteredNodes = $this->filterNodesBetween(null, $firstNode, $lastNode);
+                        $newText = "";
+                        foreach($filteredNodes as $filteredNode) {
+                            if($filteredNode->nodeName == "w:t") {
+                                $newText .= $filteredNode->textContent;
+                            }
+                            if(!$filteredNode->isSameNode($firstNode)) {
+                                $this->removeNode($filteredNode);
+                            }
+                        }
+                        $firstNode->textContent = $newText;
+                        $elements[] = $firstNode;
+                    }
+                }
+            }
+            
+        }
+        $this->setSearch($elements, $append);
+        return $this;
+    }
+
+    function findAndMergeParagraphRegex(string $find, bool $append = false) {
+        return $this->findAndMergeParagraphText($find, $append);
+    }
+
+    function andFindAndMergeParagraphText(string $find, bool $regex = false) {
+        return $this->findAndMergeParagraphText($find, $regex, true);
+    }
+
+    function andFindAndMergeParagraphRegex(string $find) {
+        return $this->findAndMergeParagraphText($find, true, true);
     }
 
     /**
