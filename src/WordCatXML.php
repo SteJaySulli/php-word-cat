@@ -677,7 +677,7 @@ class WordCatXML {
     }
 
     function findAndMergeParagraphRegex(string $find, bool $append = false) {
-        return $this->findAndMergeParagraphText($find, $append);
+        return $this->findAndMergeParagraphText($find, true, $append);
     }
 
     function andFindAndMergeParagraphText(string $find, bool $regex = false) {
