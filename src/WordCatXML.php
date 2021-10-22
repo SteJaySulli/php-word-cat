@@ -137,16 +137,55 @@ class WordCatXML {
         return $newNode;
     }
 
+    /**
+     * Create a node in this document with the provided attributes and text content.
+     *
+     * @param string $tagname
+     * @param array $attrs
+     * @param string $text
+     * @return DOMNode
+     */
     function createNode($tagname, $attrs=[], $text=null) {
-        $node = $this->document->createElement($tagname, $text);
+        $node = $this->document->createElement($tagname);
         if(is_array($attrs)) {
             foreach($attrs as $key=>$value) {
                 $node->setAttribute($key, $value);
             }
         }
+        if($text) {
+            $node->appendChild($this->document->createTextNode($text));
+        }
         return $node;
     }
 
+    /**
+     * Create a tree of nodes defined in the given array. The array consists of an array representation
+     * of elements that appear within each other - each must have a "tag" element containing the tagname,
+     * and you can also provide "attributes", "text" and "children" elements - for example:
+     * 
+     * [
+     *   [
+     *      "tag" => "w:r", 
+     *      "children": [
+     *          [
+     *              "tag":"w:t",
+     *              "text": "This is some text we want to appear",
+     *              "attributes": [
+     *                  "attr1"=>"val1",
+     *                  "attr2"=>"val2"
+     *              ]
+     *          ]
+     *      ]
+     *   ]
+     * ]
+     * 
+     * This would produce the xml <w:r><w:t attr1="val1" attr2="val2">This is some text we want to appear</w:t></w:r>
+     *
+     * @param array $tree
+     * @param DOMNode $target
+     * @param callable $callback
+     * @return void
+     */
     function createNodeTree($tree, $target, $callback) {
         foreach($tree as $element) {
             $attrs = null;
