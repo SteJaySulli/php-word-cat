@@ -2,7 +2,7 @@
     "name": "stejaysulli/php-word-cat",
     "description": "Library to manipulate docx files",
     "type": "library",
-    "license": "LGPL-1.2-or-later",
+    "license": "LGPL-3.0-only",
     "authors": [
         {
             "name": "Stephen Sullivan",
