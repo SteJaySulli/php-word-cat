@@ -8,9 +8,9 @@ This library requires `DOMDocument` and `SimpleXML`.
 This library was designed to solve some fairly specific issues I was having with (mentioning no names) another popular PHP library when creating new documents from a given template; As such there are a **lot** of features that simply aren't implemented as I have had no need for them. I have added a "limitations" section below to list particularly glaring features which you may want but are missing, but if a feature you want isn't in the bullet list below, take it as read that the library won't do it for you!
 
 * Open a docx document
-* Read files from the document
-* Write files to the document
-* Manipulate XML files within the document
+* Extract and read  XML files from the document
+* Write XML files to the document
+* Manipulate XML within the document's files
 * Save docx, either overwriting the original file or as a new document
 * Search for text, either as a binary/plain text search or regular expression
 * Replace text, either as a binary/plain text search or regular expression
@@ -23,6 +23,7 @@ As this library was designed to solver some fairly specific issues, it will not 
 
 * You cannot create a new document from scratch; you need to load an existing docx file to work on
 * The library is naive; most operations require some knowledge of the internal XML structure of docx files
+* The abstractions provided are designed to perform specific tasks (see [tests/example.php](./tests/example.php) to get a feel for this); to be more suitable for general use they will likely need breaking changes so make sure you lock to a specific version if you're using this library now!
 
 # Installation
 
