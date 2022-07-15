@@ -1,4 +1,4 @@
-# WordCat - BETA
+# WordCat - Limited manipulation of docx word processed documents
 A simple php library for manipulation of docx word processed document; in particular the library is designed to allow content from one document to be inserted into another document, and it also provides some features allowing for searching and replacing content, and inserting new text and images.
 
 # Dependencies
